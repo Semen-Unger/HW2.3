@@ -7,7 +7,7 @@ import requests
 import networkx as nx
 from tqdm import tqdm
 
-path = '/content/drive/MyDrive/links.txt'
+path = '/HW2.3/links.txt'
 links_array = [link for link in open(path)]
 for link in links_array: 
     print(link)
