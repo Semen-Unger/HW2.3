@@ -1,0 +1,314 @@
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.utils import to_categorical
+from keras.models import load_model
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import Dropout
+from keras.layers import Flatten
+from keras.optimizers import Adam
+from tensorflow.python.keras.layers import Activation
+from keras import regularizers
+from tensorflow.python.keras.layers import Conv2D, MaxPooling2D
+from tensorflow.keras.applications import EfficientNetB7
+from tensorflow.keras.applications.resnet50 import preprocess_input, decode_predictions
+
+
+
+#__________________________________automatic marking of the dataset of the 2nd version of the assembly_________________________________________
+#автоматическая разметка датасета 2ой верссии сборки
+train_data_dir = "/content/drive/MyDrive/Ожидает Казамбаев Семён БПМ234/dataset/train"      # Определите пути к папкам с классами для обучения
+val_data_dir = "/content/drive/MyDrive/Ожидает Казамбаев Семён БПМ234/dataset/validation"   # Определите пути к папкам с классами для валидации
+class_names = ['asian', 'european', 'indian', 'negroids']
+img_height, img_width = 224, 224
+batch_size = 20
+
+# Разделение данных на обучающий и тестовый выборки в соотношени 80:20%
+train_dataset = tf.keras.utils.image_dataset_from_directory(                    # Генерирaция тензорного представления
+    train_data_dir,                                                             #       набора данных для тестирования
+    shuffle=True,
+    image_size=(img_height, img_width),
+    batch_size=batch_size,
+    label_mode='categorical',
+    color_mode='rgb'
+)
+
+validation_dataset = tf.keras.utils.image_dataset_from_directory(               # Генерирaция тензорного представления
+    val_data_dir,                                                               #          набора данных для валидации
+    shuffle=True,
+    image_size=(img_height, img_width),
+    batch_size=batch_size,
+    label_mode='categorical',
+    color_mode='rgb'
+)
+
+train_dataset = train_dataset.map(lambda x, y: (x / 255.0, y))
+validation_dataset = validation_dataset.map(lambda x, y: (x / 255.0, y))
+print(len(train_dataset), len(validation_dataset))
+
+
+#_________________________________________MODEL_BUILDING___________________________________________________________
+
+# ___Model 1, based on convolutional neural network (CNN) layers___________________________________________________
+# Размерность тензора на основе изображения для входных данных в нейронную сеть
+input_shape = (img_width, img_height, 3)                                        # backend Tensorflow, channels_last
+model = Sequential()
+
+# Сверточные слои 224×224 -> 112х112 -> 56х56 -> 28х28:
+model.add (Conv2D(32, (3, 3), input_shape=input_shape))
+model. add (Activation('relu'))
+model. add (MaxPooling2D(pool_size=(2, 2), strides=2))
+model. add (Conv2D(64, (3, 3)))
+model.add (Activation('relu'))
+model. add (MaxPooling2D(pool_size=(2, 2), strides=2))
+model.add (Conv2D(128, (3, 3)))
+model.add(Activation('relu'))
+model.add (MaxPooling2D(pool_size=(2, 2), strides=2))
+model. add (Conv2D(256, (3, 3)))
+model.add(Activation('relu'))
+model.add (MaxPooling2D(pool_size=(2, 2), strides=2))
+
+# Слои полносвязной нейронной сети:
+model. add (Flatten())
+model. add (Activation('relu'))
+model. add (Dense (784))
+model. add(Activation('relu'))
+model. add (Dropout (0.5))
+model. add (Dense (392))
+model.add(Activation('relu'))
+model. add (Dropout (0.5))
+model. add (Dense (196))
+model.add(Activation('relu'))
+model. add (Dropout(0.5))
+model. add (Dense (98))
+model. add(Activation('relu'))
+model. add (Dropout(0.5))
+model. add (Dense (32))
+model.add (Activation('relu'))
+model. add (Dropout (0.5))
+model. add (Dense (4))
+model.add(Activation('sigmoid'))
+
+
+# ___Model 2 (1 large), based on convolutional neural network (CNN) layers_________________________________________
+# Размерность тензора на основе изображения для входных данных в нейронную сеть
+input_shape = (img_width, img_height, 3)                                        # backend Tensorflow, channels_last
+model = Sequential()
+
+# Сверточные слои 224х224 -> 112х112 -> 56х56:
+model.add(Conv2D(32, (3, 3), input_shape=input_shape))
+model.add(Activation('relu'))
+model.add(MaxPooling2D(pool_size=(2, 2), strides=2))
+model.add(Conv2D(64, (3, 3)))
+model.add(Activation('relu'))
+model.add(MaxPooling2D(pool_size=(2, 2), strides=2))
+model.add(Conv2D(128, (3, 3)))
+model.add(Activation('relu'))
+model.add(MaxPooling2D(pool_size=(2, 2), strides=2))
+
+# Слои полносвязной нейронной сети:
+model.add(Flatten())
+model.add(Dense(2048, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.01), activity_regularizer=regularizers.l1(0.01)))
+model.add(Activation('relu'))
+model.add(Dense(4096, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.01), activity_regularizer=regularizers.l1(0.01)))
+model.add(Activation('relu'))
+model.add(Dense(4096, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.01), activity_regularizer=regularizers.l1(0.01)))
+model.add(Activation('relu'))
+model.add(Dense(4096, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.01), activity_regularizer=regularizers.l1(0.01)))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+model.add(Dense(2048, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.001), activity_regularizer=regularizers.l1(0.001)))
+model.add(Activation('relu'))
+model.add(Dense(2048, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.001), activity_regularizer=regularizers.l1(0.001)))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+model.add(Dense(1024, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.001), activity_regularizer=regularizers.l1(0.001)))
+model.add(Activation('relu'))
+model.add(Dense(512, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.01), activity_regularizer=regularizers.l1(0.01)))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+model.add(Dense(256, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.01), activity_regularizer=regularizers.l1(0.01)))
+model.add(Activation('relu'))
+model.add(Dense(128, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.01), activity_regularizer=regularizers.l1(0.01)))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+model.add(Dense(64, kernel_regularizer=regularizers.l2(0.001), bias_regularizer=regularizers.l2(0.1), activity_regularizer=regularizers.l1(0.1)))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+model.add(Dense(4))
+model.add(Activation('sigmoid'))
+
+
+# ___Model 3, based on ResNet50_________________________________________________________________________________________________________
+RS50 = tf.keras.applications.resnet50.ResNet50(include_top=True,weights=None,input_tensor=None,input_shape=None,pooling=None,classes=16)
+input_shape = RS50
+model = Sequential()
+model.add(input_shape)
+model.add(Flatten())
+model.add(Activation('relu'))
+model.add(Dense(16))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+model.add(Dense(8))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+model.add(Dense(4))
+model.add(Activation('sigmoid'))
+
+
+# ___Model 4, based on EfficientNetB7___________________________________________________________________________________________________
+#Класс-инструмент необходимый для корректного сохранения модели:
+class MyModuleWrapper(tf.Module):
+    def __init__(self, layer):
+        super().__init__()
+        self.layer = layer
+    def __call__(self, inputs):
+        return self.layer(inputs)
+    def get_config(self):
+        return {"layer": self.layer.get_config()}
+
+#автоматическая разметка датасета 2ой верссии сборки
+train_data_dir = "/content/drive/MyDrive/Ожидает Казамбаев Семён БПМ234/dataset/train"      # Определите пути к папкам с классами для обучения
+val_data_dir = "/content/drive/MyDrive/Ожидает Казамбаев Семён БПМ234/dataset/validation"   # Определите пути к папкам с классами для валидации
+class_names = ['asian', 'european', 'indian', 'negroids']
+img_height, img_width = 600, 600
+batch_size = 20
+
+# Разделение данных на обучающий и тестовый выборки в соотношени 80:20%
+# Генерирaция тензорного представления набора данных для тестирования
+train_dataset = tf.keras.utils.image_dataset_from_directory(                    
+    train_data_dir, shuffle=True, image_size=(img_height, 
+    img_width), batch_size=batch_size,label_mode='categorical', color_mode='rgb')
+
+# Генерирaция тензорного представления набора данных для валидации
+validation_dataset = tf.keras.utils.image_dataset_from_directory(
+    val_data_dir, shuffle=True, image_size=(img_height, 
+    img_width), batch_size=batch_size, label_mode='categorical', color_mode='rgb')
+
+train_dataset = train_dataset.map(lambda x, y: (x / 255.0, y))
+validation_dataset = validation_dataset.map(lambda x, y: (x / 255.0, y))
+print(len(train_dataset), len(validation_dataset))
+
+
+EfNetD7 = keras.applications.EfficientNetB7(
+    include_top=True,
+    weights="imagenet",
+    input_tensor=None,
+    input_shape=None,
+    pooling=None,
+    classes=1000,
+    classifier_activation="softmax"
+)
+
+# Слои полносвязной нейронной сети:
+input_shape = MyModuleWrapper(EfNetD7)
+
+Flatten_layer = MyModuleWrapper(Flatten())
+D_layer01 = MyModuleWrapper(Dense(1000, activation='relu'))
+D_layer02 = MyModuleWrapper(Dense(256, activation='relu'))
+D_layer03 = MyModuleWrapper(Dense(128, activation='relu'))
+D_layer_mod01 = MyModuleWrapper(Dense(784, activation='relu', kernel_regularizer=regularizers.l2(0.01),
+                                      bias_regularizer=regularizers.l2(0.01), activity_regularizer=regularizers.l1(0.01)))
+D_layer_mod02 = MyModuleWrapper(Dense(256, activation='relu', kernel_regularizer=regularizers.l2(0.01),
+                                      bias_regularizer=regularizers.l2(0.01), activity_regularizer=regularizers.l1(0.01)))
+D_layer_mod03 = MyModuleWrapper(Dense(128, activation='relu', kernel_regularizer=regularizers.l2(0.01),
+                                      bias_regularizer=regularizers.l2(0.01), activity_regularizer=regularizers.l1(0.01)))
+Drop_layer = MyModuleWrapper(Dropout(0.5))
+Output_layer = MyModuleWrapper(Dense(4, activation='sigmoid'))
+
+model = Sequential([
+    input_shape,
+    Flatten_layer,
+    D_layer01,
+    Drop_layer,
+    D_layer_mod01,
+    #Drop_layer,
+    #D_layer02,
+    #Drop_layer,
+    #D_layer_mod02,
+    #Drop_layer,
+    D_layer03,
+    #D_layer_mod03,
+    Drop_layer,
+    Output_layer])
+
+
+# ________________________________________________________________MODEL COMPILING______________________________________________________________
+model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'], run_eagerly=True)
+
+
+# ________________________________________________________________MODEL TRAINING_______________________________________________________________
+history = model.fit(train_dataset, epochs=3, validation_data=validation_dataset, validation_steps=1)
+
+
+# ________________________________________________________________MODEL SAVING_________________________________________________________________
+model.save("My_model_02_EfficientNetB7")
+
+
+# ________________________________________________________________MODEL TESTING________________________________________________________________
+#model = load_model("/content/My_model_02_EfficientNetB7")
+#model.load_weights("/content/drive/MyDrive/NW02PchB7.h5")
+
+input_shape = (20, 600, 600, 3)
+model.build(input_shape)
+model.load_weights("/content/drive/MyDrive/NW02PchB7.h5")
+test_loss, test_acc = model.evaluate(validation_dataset)
+print("Тестовая потеря:", test_loss)
+print("Тестовая точность:", test_acc)
+
+predict = model.predict(validation_dataset).flatten()
+# Извлекаем целевые векторы из validation_dataset
+new_validation_dataset = validation_dataset.map(lambda x, y: (tf.reshape(x, (1, 150528)), y))
+
+
+# ________________________________________________________________VISUALISATION________________________________________________________________
+plt.plot(history.history['accuracy'],
+         label='Точность валидации на обучающем наборе')
+plt.plot(history.history['val_accuracy'],
+         label='Точность валидации ошибка на валидационном наборе')
+plt.xlabel('Эпоха обучения')
+plt.ylabel('Средняя абсолютная ошибка')
+plt.legend(bbox_to_anchor=(1, -0.1))
+plt.show()
+
+
+
+
+________________________________________________________________manual markup of the dataset___________________________________________________
+# #ручная разметка датасета
+# img_height, img_width = 224, 224
+# batch_size = 20
+# training_train = tf.keras.utils.image_dataset_from_directory(
+#   "/content/drive/MyDrive/Race",image_size=(img_height, img_width),batch_size=batch_size)
+# test_train = tf.keras.utils.image_dataset_from_directory(
+#   "/content/drive/MyDrive/Race",image_size=(img_height, img_width),batch_size=batch_size)
+# validation_train = np.array([0] * 274 + [1] * 117 + [2] * 115 + [3]  * 268)
+# validation_train_vector = keras.utils.to_categorical(validation_train, 4)
+# validation_test = np.array([0] * (343-274) + [1] * (147-117) + [2] * (144-115) + [3] * (336-268))
+# validation_test_vector = keras.utils.to_categorical(validation_train, 4)
+
+#__________________________________automatic marking of the dataset of the 1nd version of the assembly_________________________________________
+# #автоматическая разметка датасета 1ой верссии сборки
+# data_dir = "/content/drive/MyDrive/train"                                       # Определите пути к папкам с классами
+# class_names = ['asian', 'european', 'indian', 'negroids']
+# img_height, img_width = 224, 224
+# batch_size = 32
+# Генерирaция тензорного представления набора данных
+# dataset = tf.keras.utils.image_dataset_from_directory(data_dir, shuffle=True, image_size=(224, 224), batch_size=1, label_mode='categorical')
+# train_size = int(len(dataset) * 0.8)
+# validation_size = len(dataset) - train_size
+# validation_dataset = tf.data.Dataset.from_tensor_slices(([], []))
+# split_tr = int(len(dataset) * 0.8)                                              # Разделение данных на обучающий и тестовый выборки в соотношени 80:20%
+# split_val = len(dataset) - split_tr
+# print(len(dataset))
+# train_dataset = dataset.take(split_tr)
+# print(len(dataset))
+# validation_dataset = dataset.skip(split_tr)
+# print(len(dataset))
+# print(len(train_dataset), split_tr, len(validation_dataset), split_val)
+
+
